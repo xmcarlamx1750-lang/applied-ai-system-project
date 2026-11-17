@@ -1,0 +1,43 @@
+flowchart LR
+    subgraph IN["INPUT"]
+        Req["Owner request<br/>'Groom Rex 30 min tomorrow morning'"]
+        Data["Owner data<br/>pets, tasks, available minutes"]
+    end
+
+    subgraph PROC["PROCESS"]
+        Parser["Parser<br/>rag.py parse_request<br/>duration, date, window, pet"]
+        Sched["Scheduler<br/>find_free_slots<br/>(deterministic, no AI)"]
+        Retr["Retriever<br/>TF-IDF over care tips<br/>+ existing tasks"]
+        Agent["Agent / Generator<br/>llm(prompt) picks a start time<br/>default: offline template"]
+        Eval{"Evaluator (guardrail)<br/>is the time inside a free slot?"}
+        Fallback["Fallback<br/>earliest free slot"]
+    end
+
+    subgraph OUT["OUTPUT"]
+        Sug["Suggestion<br/>start time + reason<br/>+ free slots + context shown"]
+        Booked["Booked task<br/>added to the pet's schedule"]
+    end
+
+    Human(["HUMAN CHECK<br/>Owner reads the suggestion,<br/>picks a start time, clicks Book"])
+    Check{"book_slot validates<br/>no conflict created?"}
+    Tester["TESTER<br/>pytest, 39 tests<br/>parser, retriever, guardrail,<br/>free slots, booking"]
+
+    Req --> Parser
+    Data --> Sched
+    Parser --> Sched
+    Sched -->|free slots| Retr
+    Retr -->|context| Agent
+    Sched -->|free slots| Agent
+    Agent --> Eval
+    Eval -->|yes| Sug
+    Eval -->|no: reply rejected| Fallback --> Sug
+    Sug --> Human
+    Human --> Check
+    Check -->|yes| Booked
+    Check -->|no: error shown| Human
+
+    Tester -.->|verifies| Parser
+    Tester -.->|verifies| Sched
+    Tester -.->|verifies| Retr
+    Tester -.->|verifies| Eval
+    Tester -.->|verifies| Check

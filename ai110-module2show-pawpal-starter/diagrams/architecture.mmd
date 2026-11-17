@@ -1,0 +1,67 @@
+flowchart TD
+    User([User in browser])
+
+    subgraph UI["app.py - Streamlit UI"]
+        Owner_in["Owner section<br/>name + available minutes"]
+        Pets_in["Pets section<br/>Add pet"]
+        Tasks_in["Tasks form<br/>Add task / Mark complete"]
+        Dash["Dashboard<br/>metrics, conflict warnings,<br/>filters, sorted task table"]
+        Build["Build Schedule<br/>Generate schedule button"]
+        Helpers["Helpers<br/>pet_of, task_rows"]
+        State[("st.session_state<br/>owner persists across reruns")]
+    end
+
+    subgraph Core["pawpal_system.py - Domain logic"]
+        Owner["Owner<br/>name, available_minutes<br/>add_pet, get_all_tasks"]
+        Pet["Pet<br/>name, species<br/>add_task, remove_task,<br/>complete_task, pending_tasks"]
+        Task["Task<br/>title, duration, priority,<br/>time, frequency, due_date<br/>mark_complete, next_occurrence,<br/>priority_rank"]
+        Scheduler["Scheduler<br/>filter_tasks, sort_tasks,<br/>sort_by_time, detect_conflicts,<br/>fits_in_time, build_plan,<br/>explain_plan"]
+    end
+
+    subgraph RAG["rag.py - Slot suggestions (retrieval + generation)"]
+        Parse["parse_request<br/>duration, date, window, pet"]
+        Retr["Retriever<br/>TF-IDF over care tips<br/>+ existing tasks"]
+        Gen["Generator llm(prompt)<br/>default: offline template"]
+        Guard{"Guardrail<br/>time inside a free slot?"}
+    end
+
+    Slots_in["Slot request<br/>Suggest slots button"]
+
+    Tests["tests/<br/>pytest"]
+
+    User --> Owner_in
+    User --> Pets_in
+    User --> Tasks_in
+    User --> Build
+
+    Owner_in --> State
+    Pets_in -->|add_pet| State
+    Tasks_in -->|add_task / complete_task| State
+    State --> Owner
+
+    Owner -->|has many| Pet
+    Pet -->|has many| Task
+    Pet -->|recurring: next_occurrence| Task
+
+    Scheduler -->|reads tasks via| Owner
+    Dash -->|filter, sort, detect_conflicts| Scheduler
+    Build -->|build_plan| Scheduler
+    Dash --> Helpers
+    Build --> Helpers
+
+    Scheduler -->|sorted, filtered tasks,<br/>plan, skipped, conflicts| Dash
+    Scheduler -->|plan, skipped, conflicts| Build
+    Dash --> User
+    Build --> User
+
+    User --> Slots_in
+    Slots_in -->|free text| Parse
+    Parse --> Scheduler
+    Scheduler -->|find_free_slots| Retr
+    Retr -->|context| Gen
+    Gen --> Guard
+    Guard -->|valid| Dash
+    Guard -->|invalid: earliest free slot| Dash
+
+    Tests -.->|verifies| Core
+    Tests -.->|verifies| RAG
